@@ -21,11 +21,11 @@ def saveImage(imageData, filename, scale=False, format="RGB"):
 
     if not scale:
         imageData[imageData > 255] = 255
+        imageData[imageData < 0] = 0
     if scale:
         imageData -= np.min(imageData)
         imageData = imageData / np.max(imageData)
         imageData *= 255
-    np.round(imageData)
     imageData = np.uint8(imageData)
     plt.imsave(filename, imageData)
 
@@ -58,12 +58,13 @@ def rgb2hsl(imageData):
                 S = 0
             else:
                 S = (D / (1 - np.abs(2 * L - 1)))
+            imageData[row,col,:] = (H,S,L)
     return imageData
 
 def hsl2rgb(imageData):
     (rows, cols, colourLength) = imageData.shape
-    for row in range(1,rows,):
-        for col in range(1,cols):
+    for row in range(0,rows,):
+        for col in range(0,cols):
             (H,S,L) = imageData[row,col,:]
             C = (1-np.abs(2*L-1))*S
             X = C * (1-np.abs(np.mod(H/60,2)-1))
@@ -82,6 +83,7 @@ def hsl2rgb(imageData):
             elif 300 <= H < 360:
                 (R2, G2, B2) = (C,0,X)
             (R, G, B) = ((R2 + m)*255), ((G2+m)*255), ((B2+m)*255)
+            imageData[row,col,:] = (R,G,B)
     return imageData
 
 def showImage(imageData):
@@ -100,7 +102,6 @@ def brightness(imageData, b, changeType="absolute"):
     elif changeType == "relative":
         imageData *= b
     else:
-        print("ERROR: changeType must be absolute or relative")
         return imageData
     return imageData
 
@@ -115,30 +116,50 @@ def saturation(imageData, amount):
 def toneMap(imageData, H, S):
     imageData[:,:,0] = H
     imageData[:,:,1] = S
+    return imageData
 
 def crop(imageData, top, bottom, left, right):
-    (rows,cols, colours) = imageData.shape
+    [rows,cols,num] = imageData.shape
+    if top < 0 or top >= bottom:
+        print("ERROR: top is outside of the range")
+        return imageData
+    elif bottom >= cols:
+        print("ERROR: bottom is outsode of the range")
+        return imageData
+    elif left <= 0 or left >= right:
+        print("ERROR: left is outside of the range")
+        return imageData
+    elif right >= rows:
+        print("ERROR: Right is outside of the range")
+        return imageData
 
+    return imageData[top:bottom, left:right]
 
 def saturated(imageData, type="white", format="RGB"):
-    PC = np.size(imageData)/3
+    PC = np.size(imageData)
     L = imageData[:,:,2]
+
     if format == "RGB":
         if type == "white":
             p = imageData[imageData >= 254.5]
+            return np.size(p) / PC * 100
         if type == "black":
             p = imageData[imageData <= 0.5]
-    if format == "hsl":
+            return np.size(p) / PC * 100
+    if format == "HSL":
         if type == "white":
             p = L[L >= 0.99]
+            return np.size(p) / (PC/3) * 100
         if type == "black":
             p = L[L <= 0.01]
-    return len(p)/PC * 100
+            return np.size(p) / (PC / 3) * 100
+
 
 def histogram(imageData, scale="linear", channel="L", bins=255, format="RGB"):
     R = imageData[:,:,0]
     G = imageData[:,:,1]
-    L, B = imageData[:,:,2]
+    B = imageData[:,:,2]
+    L = imageData[:,:,2]
 
     if scale == "linear":
         if format == "RGB":
@@ -163,10 +184,33 @@ def histogram(imageData, scale="linear", channel="L", bins=255, format="RGB"):
             elif channel == "B":
                 hsl2rgb(imageData)
                 plt.hist(B.reshape(-1), bins)
+    if scale == "log":
+        if format == "RGB":
+            if channel == "L":
+                rgb2hsl(imageData)
+                plt.hist(L.reshape(-1), bins,log=True)
+            elif channel == "R":
+                plt.hist(R.reshape(-1), bins,log=True)
+            elif channel == "G":
+                plt.hist(G.reshape(-1), bins,log=True)
+            elif channel == "B":
+                plt.hist(B.reshape(-1), bins,log=True)
+        if format == "HSL":
+            if channel == "L":
+                plt.hist(L.reshape(-1), bins,log=True)
+            elif channel == "R":
+                hsl2rgb(imageData)
+                plt.hist(R.reshape(-1), bins,log=True)
+            elif channel == "G":
+                hsl2rgb(imageData)
+                plt.hist(G.reshape(-1), bins,log=True)
+            elif channel == "B":
+                hsl2rgb(imageData)
+                plt.hist(B.reshape(-1), bins,log=True)
 
 def unsharpMask(imageData, radius=5, amount=2, format="RGB"):
     if format == "HSL":
-        rgb2hsl(imageData)
+        hsl2rgb(imageData)
     sigma = radius/3
     RB = gf.gaussian_filter(imageData[:,:,0], sigma)
     GB = gf.gaussian_filter(imageData[:, :, 1], sigma)
@@ -181,4 +225,3 @@ def unsharpMask(imageData, radius=5, amount=2, format="RGB"):
     imageData[:,:,2] = BS
 
     return imageData
-
